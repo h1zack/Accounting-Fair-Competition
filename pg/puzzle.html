@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Accounting Puzzle Grid</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;900&family=Inter:wght@400;600;800&display=swap');
+
+        body { font-family: 'Inter', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        @keyframes popIn { 0% { transform: scale(0.95); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes popOut { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(0.95); opacity: 0; } }
+        @keyframes slideUp { 0% { transform: translateY(20px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+        @keyframes flashRed { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        @keyframes flipWin { 0% { transform: perspective(400px) rotateY(0); } 40% { transform: perspective(400px) rotateY(180deg); } 100% { transform: perspective(400px) rotateY(360deg); } }
+
+        .animate-pop { animation: popIn 0.2s ease-out forwards; }
+        .animate-slide-up { animation: slideUp 0.4s ease-out forwards; }
+        .animate-pop-out { animation: popOut 0.3s ease-in forwards; }
+        .animate-flip-win { animation: flipWin 0.8s ease-out forwards; }
+        .animate-flash-red { animation: flashRed 0.8s infinite alternate; }
+        
+        .grid-box { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .grid-box:hover:not(:disabled) { transform: translateY(-4px); z-index: 10; box-shadow: 0 10px 20px -5px rgba(0,0,0,0.15); }
+        .grid-box:active:not(:disabled) { transform: translateY(0); }
+
+        /* FLIP CARD CSS - DIPERBESAR */
+        #flipCard {
+            width: 900px;
+            height: 600px; 
+            perspective: 1000px; 
+            transition: opacity 0.3s ease-in-out;
+            max-width: 95vw; 
+            max-height: 95vh;
+        }
+        #flipCardInner {
+            position: relative; width: 100%; height: 100%; text-align: center;
+            transition: transform 0.6s ease-in-out; transform-style: preserve-3d;
+        }
+        .flip-active #flipCardInner { transform: rotateY(180deg); }
+        .flipCardFace {
+            position: absolute; width: 100%; height: 100%;
+            -webkit-backface-visibility: hidden; backface-visibility: hidden;
+            border-radius: 1.5rem;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center; padding: 3rem;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); border: 1px solid #e5e7eb; overflow: hidden; 
+        }
+        .flipCardBack {
+            transform: rotateY(180deg); background-color: white;
+            justify-content: flex-start; padding: 0; position: relative; 
+        }
+
+        /* SCROLLBAR UTILS */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 h-screen flex flex-col overflow-hidden select-none">
+
+    <!-- AUDIO ELEMENTS -->
+    <audio id="sfx-flip" src="flip.mp3"></audio>
+    <audio id="sfx-correct" src="correct.mp3"></audio>
+    <audio id="sfx-wrong" src="wrong.mp3"></audio>
+    <audio id="sfx-bonus" src="bonus.mp3"></audio>
+
+    <!-- 1. SETUP SCREEN -->
+    <div id="setupScreen" class="fixed inset-0 z-40 flex items-center justify-center bg-gray-100/90 backdrop-blur-sm p-4 overflow-y-auto">
+        <div class="bg-white p-6 md:p-8 rounded-2xl shadow-xl max-w-lg w-full text-center border border-gray-200 animate-pop my-auto">
+            <!-- LOGO SECTION -->
+            <div class="w-32 h-32 mx-auto mb-6 rounded-xl overflow-hidden shadow-sm border border-gray-100 flex items-center justify-center bg-gray-50">
+                <img src="logo.jpg" alt="LOGO" class="w-full h-full object-contain" onerror="this.parentElement.innerHTML='<span class=\'text-gray-400 font-bold\'>LOGO</span>'">
+            </div>
+            
+            <h1 class="text-3xl font-extrabold mb-2 tracking-tight text-gray-900">Accounting Puzzle</h1>
+            <p class="text-gray-500 mb-6 font-medium text-sm">Sistem Lomba Cerdas Cermat</p>
+            
+            <div class="grid grid-cols-2 gap-3 mb-6 text-left">
+                <div><label class="text-[10px] font-bold text-yellow-600 uppercase block mb-1">Tim Kuning</label><input type="text" id="name-yellow" value="Tim Kuning" class="w-full border-yellow-300 rounded px-2 py-2 text-sm border-2"></div>
+                <div><label class="text-[10px] font-bold text-green-600 uppercase block mb-1">Tim Hijau</label><input type="text" id="name-green" value="Tim Hijau" class="w-full border-green-300 rounded px-2 py-2 text-sm border-2"></div>
+                <div><label class="text-[10px] font-bold text-blue-600 uppercase block mb-1">Tim Biru</label><input type="text" id="name-blue" value="Tim Biru" class="w-full border-blue-300 rounded px-2 py-2 text-sm border-2"></div>
+                <div><label class="text-[10px] font-bold text-orange-600 uppercase block mb-1">Tim Oranye</label><input type="text" id="name-orange" value="Tim Oranye" class="w-full border-orange-300 rounded px-2 py-2 text-sm border-2"></div>
+            </div>
+
+            <div class="flex flex-col md:flex-row gap-3">
+                <button onclick="window.game.openQuestionEditor()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-xl flex justify-center items-center gap-2 text-sm border border-gray-300">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                    Edit Soal
+                </button>
+                <button onclick="window.game.start()" class="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg flex justify-center items-center gap-2 active:scale-95">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    MULAI LOMBA
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 1.5 QUESTION EDITOR MODAL -->
+    <div id="editorModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/80 backdrop-blur-sm p-2 md:p-4">
+        <div class="bg-white w-full max-w-4xl h-[90vh] md:h-[85vh] rounded-xl shadow-2xl border border-gray-200 flex flex-col animate-pop relative">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-t-xl shrink-0">
+                <h2 class="text-lg font-bold text-gray-800">Editor Soal</h2>
+                <button onclick="window.game.resetQuestionsToDefault()" class="text-xs text-red-500 hover:text-red-700 underline font-medium">Reset Default</button>
+            </div>
+            <div id="editorContent" class="flex-1 overflow-y-auto p-4 bg-gray-50 grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+            <div class="p-4 border-t border-gray-200 bg-white flex justify-between gap-3 rounded-b-xl shrink-0 z-10 shadow-[0_-4px_10px_-2px_rgba(0,0,0,0.1)]">
+                <button onclick="document.getElementById('editorModal').classList.add('hidden')" class="px-4 py-3 text-gray-600 hover:bg-gray-100 rounded-lg font-bold text-sm">Batal</button>
+                <button onclick="window.game.saveQuestions()" class="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-md text-sm flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    SIMPAN & TERAPKAN
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. GAME INTERFACE -->
+    <div id="gameInterface" class="hidden flex-col h-full w-full">
+        <div class="h-14 md:h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6 shadow-sm z-30 relative">
+            <div class="flex items-center gap-3">
+                <!-- LOGO IN HEADER -->
+                <div class="w-10 h-10 rounded-lg overflow-hidden shadow-sm border border-gray-100 hidden md:block bg-white">
+                    <img src="logo.jpg" alt="Logo" class="w-full h-full object-contain" onerror="this.style.display='none'">
+                </div>
+                <div class="font-bold text-lg md:text-xl tracking-wider text-gray-800">PUZZLE GRID</div>
+            </div>
+            
+            <div id="globalTimerBox" class="flex items-center gap-2 text-xl md:text-2xl font-mono font-black px-4 py-1 rounded-lg bg-gray-100 text-gray-700 border border-gray-200">
+                <span id="globalTimerDisplay">30:00</span>
+            </div>
+
+            <button onclick="window.game.showResetConfirm()" class="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 p-2 rounded-lg transition-colors flex items-center gap-2 text-xs md:text-sm font-bold px-3">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                <span class="hidden md:inline">RESET</span>
+            </button>
+        </div>
+
+        <div class="flex-1 flex overflow-hidden">
+            <div class="w-64 md:w-80 bg-white border-r border-gray-200 flex flex-col p-4 gap-3 overflow-y-auto z-20 shadow-[4px_0_24px_-10px_rgba(0,0,0,0.1)] hidden md:flex">
+                <h2 class="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1 px-1">Klasemen</h2>
+                <div id="scoreBoard" class="space-y-3"></div>
+                <h2 class="text-gray-400 text-xs font-bold uppercase tracking-widest mt-4 mb-1 px-1 border-t pt-4 border-gray-100">Kontrol Giliran</h2>
+                <div id="turnControl" class="grid grid-cols-2 gap-2"></div>
+            </div>
+
+            <div class="md:hidden absolute bottom-0 left-0 right-0 bg-white border-t p-2 flex justify-around z-30" id="mobileScore"></div>
+
+            <div class="flex-1 p-4 md:p-8 flex items-center justify-center bg-gray-50 relative">
+                <div class="absolute inset-0 opacity-[0.4]" style="background-image: radial-gradient(#94a3b8 1px, transparent 1px); background-size: 24px 24px;"></div>
+                <div id="gridContainer" class="grid grid-cols-4 gap-2 md:gap-4 w-full max-w-3xl aspect-square relative z-10"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- TRANSITION & MODAL OVERLAY -->
+    <div id="transitionOverlay" class="hidden fixed inset-0 z-[90] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+        <div id="flipCard" class="animate-pop">
+            <div id="flipCardInner">
+                <!-- FRONT -->
+                <div id="flipCardFront" class="flipCardFace bg-white">
+                    <div class="w-24 h-24 mb-4 opacity-80">
+                         <img src="logo.jpg" alt="Logo" class="w-full h-full object-contain" onerror="this.style.display='none'">
+                    </div>
+                    <h3 class="text-2xl md:text-3xl font-bold text-gray-700 mb-2">Kotak Dipilih!</h3>
+                    <div id="transitionNumber" class="text-7xl md:text-9xl font-black text-gray-800 tracking-tight mb-4">#1</div>
+                    <p class="text-gray-500 text-base md:text-xl">Memuat...</p>
+                </div>
+                <!-- BACK -->
+                <div id="flipCardBack" class="flipCardFace flipCardBack">
+                    <!-- Transition Screen -->
+                    <div id="transitionScreen" class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white p-8 transition-opacity duration-300">
+                        <h3 id="transitionText" class="text-2xl md:text-3xl font-bold text-gray-700 mb-6">Kotak Dipilih!</h3>
+                        <div id="transitionBadge" class="text-5xl md:text-8xl font-black uppercase px-8 py-4 md:px-10 md:py-6 rounded-2xl text-white tracking-widest animate-pulse">JENIS</div>
+                    </div>
+                    <!-- Question Content -->
+                    <div id="questionContent" class="w-full h-full flex flex-col opacity-0 transition-opacity duration-500 pointer-events-none">
+                        <div class="bg-gray-50 p-5 flex justify-between items-center border-b border-gray-200 shrink-0">
+                            <div class="flex items-center gap-3">
+                                <span id="qTypeBadge" class="px-3 py-1.5 rounded-md text-xs md:text-sm font-bold uppercase shadow-sm">Teori</span>
+                                <span id="qNumber" class="text-gray-400 text-sm md:text-base font-mono font-bold">#1</span>
+                            </div>
+                        </div>
+                        <div class="p-8 md:p-12 text-center flex-1 flex flex-col justify-center items-center bg-white relative overflow-y-auto">
+                            <h3 id="qText" class="text-2xl md:text-4xl font-bold leading-relaxed mb-8 text-gray-800 max-w-4xl">Soal...</h3>
+                            <div id="answerBox" class="hidden w-full bg-green-50 p-6 rounded-xl border border-green-200 animate-slide-up shadow-sm">
+                                <p class="text-sm text-green-600 uppercase font-bold mb-1">Kunci Jawaban:</p>
+                                <p id="qAnswer" class="text-xl md:text-2xl text-green-700 font-bold">Jawaban...</p>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 p-5 border-t border-gray-200 flex justify-between items-center shrink-0">
+                            <button onclick="window.game.toggleAnswer()" class="text-gray-500 text-sm md:text-base font-semibold underline relative z-50 hover:text-gray-800 transition-colors">Lihat Jawaban</button>
+                            <div class="flex gap-3 relative z-50">
+                                <button onclick="window.game.submitAnswer(false)" class="px-6 py-3 md:px-8 md:py-4 bg-red-100 hover:bg-red-200 text-red-700 rounded-xl font-bold text-sm md:text-lg active:scale-95 transition-all border border-red-200 shadow-sm">SALAH</button>
+                                <button onclick="window.game.submitAnswer(true)" class="px-6 py-3 md:px-8 md:py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-sm md:text-lg active:scale-95 transition-all shadow-md">BENAR (+25)</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RESET CONFIRM -->
+    <div id="resetConfirmModal" class="hidden fixed inset-0 z-[120] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
+        <div class="bg-white p-6 rounded-2xl border border-gray-200 max-w-sm w-full text-center shadow-2xl animate-pop">
+            <h3 class="text-xl font-bold text-gray-900 mb-2">Reset Permainan?</h3>
+            <div class="flex gap-3 justify-center mt-4">
+                <button onclick="document.getElementById('resetConfirmModal').classList.add('hidden')" class="px-4 py-2 bg-gray-100 rounded-lg font-bold">Batal</button>
+                <button onclick="window.game.confirmReset()" class="px-4 py-2 bg-red-600 text-white rounded-lg font-bold">Ya, Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BONUS OVERLAY -->
+    <div id="bonusOverlay" class="hidden fixed inset-0 z-[110] flex items-center justify-center pointer-events-none p-4">
+        <div class="bg-white border-4 border-yellow-400 p-8 md:p-12 rounded-3xl text-center shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] animate-pop transform scale-110">
+            <div class="text-yellow-500 mb-4 animate-bounce inline-block bg-yellow-50 p-4 rounded-full">
+                <svg class="w-20 h-20" fill="currentColor" viewBox="0 0 24 24"><path d="M13 2L3 14h9v8l10-12h-9l9-8z"/></svg>
+            </div>
+            <h2 class="text-4xl md:text-6xl font-black text-gray-900 italic uppercase mb-2">CONNECT 4!</h2>
+            <div id="bonusTeamName" class="text-2xl md:text-4xl font-bold text-yellow-600 mb-4 mt-2">Tim Kuning</div>
+            <div class="bg-gradient-to-r from-yellow-400 to-orange-500 text-white font-black px-6 py-2 md:px-10 md:py-4 rounded-full text-xl md:text-3xl shadow-xl">BONUS +50</div>
+        </div>
+    </div>
+
+    <!-- LOGIC -->
+    <script>
+        const TEAMS_CONFIG = [
+            { id: 'yellow', name: 'Tim Kuning', bg: 'bg-yellow-400', border: 'border-yellow-400', text: 'text-yellow-700' },
+            { id: 'green', name: 'Tim Hijau', bg: 'bg-green-600', border: 'border-green-600', text: 'text-green-700' },
+            { id: 'blue', name: 'Tim Biru', bg: 'bg-blue-600', border: 'border-blue-600', text: 'text-blue-700' },
+            { id: 'orange', name: 'Tim Oranye', bg: 'bg-orange-500', border: 'border-orange-500', text: 'text-orange-700' }
+        ];
+
+        const DEFAULT_QUESTIONS = [
+            { type: 'teori', text: "Laporan posisi keuangan pada tanggal tertentu...", answer: "Neraca" },
+            { type: 'jurnal', text: "Jurnal pembayaran sewa dibayar dimuka tunai...", answer: "Db. Sewa Dibayar Dimuka, Kr. Kas" },
+            { type: 'hitungan', text: "Aset 500jt, Kewajiban 200jt. Ekuitas?", answer: "Rp 300.000.000" },
+            { type: 'teori', text: "Standar akuntansi umum di Indonesia...", answer: "SAK" },
+            { type: 'hitungan', text: "HPP 50jt, Jual 80jt, Beban 10jt. Laba?", answer: "20 Juta" },
+            { type: 'jurnal', text: "Pelunasan piutang dicatat...", answer: "Db. Kas, Kr. Piutang" },
+            { type: 'teori', text: "Metode susut jam mesin...", answer: "Satuan Jam Jasa" },
+            { type: 'jurnal', text: "Prive Rp1jt dicatat...", answer: "Db. Prive, Kr. Kas" },
+            { type: 'hitungan', text: "Bunga 12% dari 10jt sebulan?", answer: "Rp 100.000" },
+            { type: 'teori', text: "Pendapatan Diterima Dimuka masuk akun...", answer: "Kewajiban" },
+            { type: 'jurnal', text: "Beli perlengkapan kredit...", answer: "Db. Perlengkapan, Kr. Utang" },
+            { type: 'hitungan', text: "Awal 10jt, Beli 20jt, Akhir 5jt. HPP?", answer: "Rp 25.000.000" },
+            { type: 'teori', text: "Biaya dicatat saat pendapatan diakui...", answer: "Matching Principle" },
+            { type: 'jurnal', text: "Susut alat kantor...", answer: "Db. Beban Susut, Kr. Akum. Susut" },
+            { type: 'hitungan', text: "Laba 10jt, Modal Awal 50jt, Prive 2jt. Akhir?", answer: "Rp 58.000.000" },
+            { type: 'teori', text: "Pihak eksternal penilai kelayakan kredit...", answer: "Kreditur / Bank" }
+        ];
+
+        const PATTERNS = [[0,1,2,3],[4,5,6,7],[8,9,10,11],[12,13,14,15],[0,4,8,12],[1,5,9,13],[2,6,10,14],[3,7,11,15],[0,5,10,15],[3,6,9,12]];
+
+        // Fungsi Play Sound yang AMAN
+        const playSfx = (id) => {
+            const audio = document.getElementById(id);
+            if(audio) {
+                audio.currentTime = 0;
+                audio.play().catch(e => console.log("Audio not played (File missing/Autoplay blocked)", e));
+            }
+        };
+
+        window.game = {
+            state: 'setup', teams: [], grid: [], turn: 0, timer: 1800, activeQ: null, timerId: null, winningIdx: [], justWonIdx: null, questions: [], patterns: [],
+
+            openQuestionEditor: function() {
+                this.questions = JSON.parse(localStorage.getItem('puzzle_questions')) || JSON.parse(JSON.stringify(DEFAULT_QUESTIONS));
+                const modal = document.getElementById('editorModal');
+                const content = document.getElementById('editorContent');
+                content.innerHTML = '';
+
+                this.questions.forEach((q, i) => {
+                    const div = document.createElement('div');
+                    div.className = 'bg-white border border-gray-200 p-3 rounded-lg shadow-sm text-xs md:text-sm';
+                    div.innerHTML = `
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-bold text-gray-500 uppercase">Kotak #${i+1}</span>
+                            <select onchange="window.game.updateQuestion(${i}, 'type', this.value)" class="border rounded bg-gray-50 px-1">
+                                <option value="teori" ${q.type === 'teori'?'selected':''}>Teori (5s)</option>
+                                <option value="jurnal" ${q.type === 'jurnal'?'selected':''}>Jurnal (10s)</option>
+                                <option value="hitungan" ${q.type === 'hitungan'?'selected':''}>Hitungan (15s)</option>
+                            </select>
+                        </div>
+                        <textarea onchange="window.game.updateQuestion(${i}, 'text', this.value)" class="w-full border rounded p-2 mb-2 h-16" placeholder="Pertanyaan">${q.text}</textarea>
+                        <input onchange="window.game.updateQuestion(${i}, 'answer', this.value)" type="text" class="w-full border rounded p-2 font-semibold text-green-700 bg-green-50" placeholder="Jawaban" value="${q.answer}">
+                    `;
+                    content.appendChild(div);
+                });
+                modal.classList.remove('hidden');
+            },
+
+            updateQuestion: function(i, f, v) { this.questions[i][f] = v; },
+            
+            saveQuestions: function() {
+                localStorage.setItem('puzzle_questions', JSON.stringify(this.questions));
+                document.getElementById('editorModal').classList.add('hidden');
+                alert("Disimpan!");
+            },
+
+            resetQuestionsToDefault: function() {
+                if(confirm("Reset ke default?")) {
+                    this.questions = JSON.parse(JSON.stringify(DEFAULT_QUESTIONS));
+                    localStorage.removeItem('puzzle_questions');
+                    this.openQuestionEditor();
+                }
+            },
+
+            start: function() {
+                const names = ['yellow','green','blue','orange'].map(c => document.getElementById(`name-${c}`).value.trim() || `Tim ${c}`);
+                this.teams = JSON.parse(JSON.stringify(TEAMS_CONFIG)).map((t, i) => ({...t, name: names[i], score: 100}));
+
+                const stored = localStorage.getItem('puzzle_questions');
+                let pool = stored ? JSON.parse(stored) : JSON.parse(JSON.stringify(DEFAULT_QUESTIONS));
+                pool.sort(() => Math.random() - 0.5);
+
+                this.grid = pool.map((q, i) => ({...q, id: i, owner: null}));
+                this.turn = 0; this.timer = 1800; this.winningIdx = []; this.justWonIdx = null; this.patterns = []; this.state = 'playing';
+
+                document.getElementById('setupScreen').classList.add('hidden');
+                document.getElementById('gameInterface').classList.remove('hidden');
+                document.getElementById('gameInterface').classList.add('flex');
+                this.render(); this.startTimer();
+            },
+
+            setManualTurn: function(i) { if(!this.activeQ) { this.turn = i; this.render(); } },
+            showResetConfirm: function() { document.getElementById('resetConfirmModal').classList.remove('hidden'); },
+            confirmReset: function() {
+                document.getElementById('resetConfirmModal').classList.add('hidden');
+                clearInterval(this.timerId);
+                document.getElementById('gameInterface').classList.remove('flex');
+                document.getElementById('gameInterface').classList.add('hidden');
+                document.getElementById('setupScreen').classList.remove('hidden');
+                document.getElementById('transitionOverlay').classList.add('hidden');
+                document.getElementById('flipCard').classList.remove('flip-active');
+            },
+
+            startTimer: function() {
+                clearInterval(this.timerId);
+                this.renderTimer();
+                this.timerId = setInterval(() => {
+                    if(this.timer <= 0) clearInterval(this.timerId);
+                    else { this.timer--; this.renderTimer(); }
+                }, 1000);
+            },
+
+            renderTimer: function() {
+                const m = Math.floor(this.timer/60).toString().padStart(2,'0');
+                const s = (this.timer%60).toString().padStart(2,'0');
+                document.getElementById('globalTimerDisplay').innerText = `${m}:${s}`;
+            },
+
+            clickBox: function(idx) {
+                if(this.grid[idx].owner !== null || this.activeQ) return;
+                playSfx('sfx-flip');
+                this.activeQ = this.grid[idx];
+                this.showTransition(idx);
+                this.setupModal();
+                setTimeout(() => document.getElementById('flipCard').classList.add('flip-active'), 100);
+                setTimeout(() => this.revealQuestion(), 3500);
+            },
+
+            showTransition: function(idx) {
+                const q = this.grid[idx];
+                document.getElementById('transitionNumber').innerText = `#${idx+1}`;
+                document.getElementById('transitionText').innerText = `Kotak #${idx+1}`;
+                const badge = document.getElementById('transitionBadge');
+                badge.innerText = q.type.toUpperCase();
+                badge.className = `text-4xl md:text-7xl font-black uppercase px-6 py-3 rounded-xl text-white tracking-widest animate-pulse ${q.type==='teori'?'bg-purple-600':q.type==='jurnal'?'bg-orange-600':'bg-cyan-600'}`;
+                
+                const overlay = document.getElementById('transitionOverlay');
+                const card = document.getElementById('flipCard');
+                const tScreen = document.getElementById('transitionScreen');
+                const qContent = document.getElementById('questionContent');
+
+                card.classList.remove('flip-active', 'animate-pop-out');
+                card.classList.add('animate-pop');
+                tScreen.style.opacity = '1'; tScreen.classList.remove('pointer-events-none');
+                qContent.style.opacity = '0'; qContent.classList.add('pointer-events-none');
+                
+                overlay.classList.remove('hidden');
+                overlay.style.opacity = '1';
+            },
+
+            setupModal: function() {
+                const q = this.activeQ;
+                const badge = document.getElementById('qTypeBadge');
+                badge.innerText = q.type.toUpperCase();
+                badge.className = `px-2 py-1 rounded text-xs font-bold uppercase ${q.type==='teori'?'bg-purple-100 text-purple-700':q.type==='jurnal'?'bg-orange-100 text-orange-700':'bg-cyan-100 text-cyan-700'}`;
+                document.getElementById('qNumber').innerText = `#${q.id+1}`;
+                document.getElementById('qText').innerText = q.text;
+                document.getElementById('qAnswer').innerText = q.answer;
+                document.getElementById('answerBox').classList.add('hidden');
+            },
+
+            revealQuestion: function() {
+                document.getElementById('transitionScreen').style.opacity = '0';
+                document.getElementById('transitionScreen').classList.add('pointer-events-none');
+                const qc = document.getElementById('questionContent');
+                qc.style.opacity = '1';
+                qc.classList.remove('pointer-events-none');
+            },
+
+            toggleAnswer: function() { document.getElementById('answerBox').classList.toggle('hidden'); },
+
+            submitAnswer: function(isCorrect) {
+                document.getElementById('transitionOverlay').classList.add('hidden');
+                document.getElementById('flipCard').classList.remove('flip-active');
+                if(isCorrect) {
+                    playSfx('sfx-correct');
+                    const tid = this.teams[this.turn].id;
+                    this.grid[this.activeQ.id].owner = tid;
+                    this.teams[this.turn].score += 25;
+                    this.justWonIdx = this.activeQ.id;
+                    this.checkBonus(tid);
+                } else {
+                    playSfx('sfx-wrong');
+                }
+                this.activeQ = null;
+                this.render();
+                setTimeout(() => this.justWonIdx = null, 2000);
+            },
+
+            checkBonus: function(tid) {
+                let bonus = false;
+                PATTERNS.forEach(p => {
+                    if(p.every(i => this.grid[i].owner === tid)) {
+                        const pid = `${tid}-${p.join('')}`;
+                        if(!this.patterns.includes(pid)) {
+                             this.patterns.push(pid);
+                             this.teams.find(t => t.id === tid).score += 50;
+                             p.forEach(i => { if(!this.winningIdx.includes(i)) this.winningIdx.push(i); });
+                             bonus = true;
+                        }
+                    }
+                });
+                if(bonus) {
+                    playSfx('sfx-bonus');
+                    const ov = document.getElementById('bonusOverlay');
+                    document.getElementById('bonusTeamName').innerText = this.teams.find(t => t.id === tid).name;
+                    ov.classList.remove('hidden');
+                    setTimeout(() => ov.classList.add('hidden'), 3500);
+                }
+            },
+
+            render: function() {
+                const board = document.getElementById('scoreBoard');
+                const controls = document.getElementById('turnControl');
+                board.innerHTML = ''; controls.innerHTML = '';
+                const mobScore = document.getElementById('mobileScore');
+                mobScore.innerHTML = '';
+
+                this.teams.forEach((t, i) => {
+                    const isTurn = i === this.turn;
+                    board.innerHTML += `
+                        <div class="relative p-3 rounded-lg border-2 transition-all ${isTurn ? 'bg-white border-blue-500 shadow-md ring-2 ring-blue-50' : 'bg-white border-gray-100 opacity-70'}">
+                            ${isTurn ? '<div class="absolute -top-2 -right-2 bg-blue-600 text-white px-1.5 py-0.5 rounded text-[9px] font-bold animate-bounce">ACTIVE</div>' : ''}
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="font-bold text-sm ${t.text}">${t.name}</span>
+                                <div class="w-2 h-2 rounded-full ${t.bg}"></div>
+                            </div>
+                            <div class="text-2xl font-black text-gray-800">${t.score}</div>
+                        </div>`;
+                    
+                    controls.innerHTML += `<button onclick="window.game.setManualTurn(${i})" class="px-2 py-1.5 rounded text-xs font-bold transition-colors ${isTurn ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'}" ${this.activeQ?'disabled':''}>${t.name.substring(0,8)}..</button>`;
+
+                    mobScore.innerHTML += `<div onclick="window.game.setManualTurn(${i})" class="flex flex-col items-center ${isTurn?'opacity-100':'opacity-50'}"><div class="w-3 h-3 rounded-full ${t.bg} mb-1"></div><span class="text-xs font-bold">${t.score}</span></div>`;
+                });
+
+                const container = document.getElementById('gridContainer');
+                container.innerHTML = '';
+                this.grid.forEach((b, i) => {
+                    const owner = this.teams.find(t => t.id === b.owner);
+                    const anim = (i === this.justWonIdx) ? 'animate-flip-win' : '';
+                    // UPDATED: Kotak abu-abu, angka hitam pekat
+                    let content = `<span class="text-2xl md:text-3xl font-mono font-black text-gray-900 opacity-80">${i+1}</span>`;
+                    let cls = `grid-box relative rounded-xl flex items-center justify-center font-bold h-full w-full outline-none transition-all ${anim} `;
+                    
+                    if(owner) {
+                        content = `<svg class="w-8 h-8 md:w-12 md:h-12 text-white opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>`;
+                        cls += `${owner.bg} shadow-md border-b-4 border-black/10`;
+                        if(this.winningIdx.includes(i)) cls += ` ring-4 ring-yellow-400 z-10`;
+                    } else {
+                        // Grey background
+                        cls += `bg-gray-100 border border-gray-300 hover:bg-gray-200 text-gray-900 shadow-sm`;
+                    }
+                    
+                    const btn = document.createElement('button');
+                    btn.className = cls;
+                    btn.innerHTML = content;
+                    btn.disabled = !!owner || this.activeQ;
+                    btn.onclick = () => this.clickBox(i);
+                    container.appendChild(btn);
+                });
+            }
+        };
+    </script>
+</body>
+</html>
